@@ -1,0 +1,1429 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <meta name="apple-mobile-web-app-title" content="우리차 어디있지?">
+    <title>우리차 어디있지?</title>
+    <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css" />
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+    <style>
+        :root {
+            --toss-bg: #F2F4F6;
+            --toss-card: #FFFFFF;
+            --toss-text-primary: #191F28;
+            --toss-text-secondary: #4E5968;
+            --toss-text-muted: #8B95A1;
+            --car1-primary: #F04452;
+            --car1-soft: #FFF0F1;
+            --car2-primary: #3182F6;
+            --car2-soft: #E8F3FF;
+        }
+
+        body {
+            -webkit-tap-highlight-color: transparent;
+            background-color: var(--toss-bg);
+            color: var(--toss-text-primary);
+            font-family: "Pretendard Variable", Pretendard, -apple-system, BlinkMacSystemFont, system-ui, Roboto, sans-serif;
+            letter-spacing: -0.02em;
+        }
+
+        /* 토스 스타일 터치 인터랙션 */
+        .toss-press {
+            transition: transform 0.14s cubic-bezier(0.2, 0, 0, 1), background-color 0.15s ease, color 0.15s ease, box-shadow 0.15s ease;
+        }
+        .toss-press:active:not(:disabled) {
+            transform: scale(0.96);
+        }
+
+        /* 텍스트 업데이트 애니메이션 */
+        @keyframes tossFadeUp {
+            from { opacity: 0; transform: translateY(6px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .animate-fadeIn {
+            will-change: transform, opacity;
+            animation: tossFadeUp 0.35s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+        }
+
+        /* 음성 녹음 중 펄스 효과 */
+        @keyframes micPulse {
+            0%, 100% { box-shadow: 0 0 0 0 rgba(240, 68, 82, 0.45); }
+            50% { box-shadow: 0 0 0 8px rgba(240, 68, 82, 0); }
+        }
+        .mic-recording {
+            animation: micPulse 1.4s infinite;
+        }
+
+        /* 상세 위치 버튼 내 토스 스타일 아이콘 배지 */
+        .zone-icon {
+            width: 24px;
+            height: 24px;
+            border-radius: 8px;
+            background-color: #FFFFFF;
+            color: #6B7684;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+            box-shadow: 0 1px 2px rgba(25, 31, 40, 0.04);
+            transition: background-color 0.15s ease, color 0.15s ease;
+        }
+        .zone-selected-car1 .zone-icon {
+            background-color: #F04452;
+            color: #FFFFFF;
+        }
+        .zone-selected-car2 .zone-icon {
+            background-color: #3182F6;
+            color: #FFFFFF;
+        }
+
+        /* 스크롤바 숨김 */
+        .no-scrollbar::-webkit-scrollbar {
+            display: none;
+        }
+        .no-scrollbar {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
+    </style>
+</head>
+<body class="antialiased pb-8 select-none">
+
+    <!-- 최초 1회 가족 PIN 번호 입력 모달 -->
+    <div id="pin-modal" class="fixed inset-0 bg-[#191F28]/50 backdrop-blur-xs z-50 hidden items-center justify-center p-5">
+        <div class="bg-white w-full max-w-xs rounded-[28px] p-6 shadow-2xl space-y-5 text-center">
+            <div class="w-12 h-12 rounded-2xl bg-[#F2F4F6] text-[#4E5968] flex items-center justify-center mx-auto">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z" />
+                </svg>
+            </div>
+            <div class="space-y-1">
+                <h2 class="text-[19px] font-bold text-[#191F28]">가족 PIN 번호를 입력해 주세요</h2>
+                <p class="text-[13px] text-[#8B95A1]">최초 1회만 입력하면 이 기기에 자동 저장돼요</p>
+            </div>
+            <form onsubmit="submitPin(event)" class="space-y-3">
+                <input
+                    type="password"
+                    id="pin-input"
+                    inputmode="numeric"
+                    placeholder="PIN 번호 입력"
+                    class="w-full py-3.5 px-4 text-center text-lg font-bold tracking-[0.25em] bg-[#F2F4F6] text-[#191F28] placeholder:text-[#B0B8C1] placeholder:tracking-normal placeholder:font-medium rounded-2xl focus:outline-none focus:ring-2 focus:ring-[#3182F6]/30 select-text"
+                    required
+                >
+                <p id="pin-error" class="text-xs font-medium text-[#F04452] hidden">PIN 번호가 일치하지 않아요</p>
+                <button
+                    type="submit"
+                    class="toss-press w-full py-3.5 bg-[#191F28] text-white rounded-2xl font-bold text-[15px] cursor-pointer"
+                >
+                    확인
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <!-- AI 음성인식 API 키 설정 모달 (Groq Whisper 초고속 추천 & Gemini 호환) -->
+    <div id="apikey-modal" class="fixed inset-0 bg-[#191F28]/50 backdrop-blur-xs z-50 hidden items-center justify-center p-5">
+        <div class="bg-white w-full max-w-xs rounded-[28px] p-6 shadow-2xl space-y-4 text-center">
+            <div class="w-12 h-12 rounded-2xl bg-[#E8F3FF] text-[#3182F6] flex items-center justify-center mx-auto">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M12 18.75a6 6 0 006-6v-1.5m-6 7.5a6 6 0 01-6-6v-1.5m6 7.5v3.75m-3.75 0h7.5M12 15.75a3 3 0 01-3-3V4.5a3 3 0 116 0v8.25a3 3 0 01-3 3z" />
+                </svg>
+            </div>
+            <div class="space-y-1">
+                <h2 class="text-[18px] font-bold text-[#191F28]">초고속 Whisper 키 등록</h2>
+                <p class="text-[12.5px] text-[#8B95A1] leading-relaxed">
+                    <b>Groq 무료 키(gsk_...)</b>를 넣으면 0.3초 만에 초고속 Whisper로 인식됩니다. (OpenAI sk-... / Gemini AIza... 키도 자동 호환)
+                </p>
+            </div>
+            <form onsubmit="submitGeminiKey(event)" class="space-y-2.5">
+                <input
+                    type="password"
+                    id="gemini-key-input"
+                    placeholder="gsk_... (Groq Whisper 추천)"
+                    class="w-full py-3 px-3.5 text-center text-[13px] font-medium bg-[#F2F4F6] text-[#191F28] placeholder:text-[#B0B8C1] rounded-2xl focus:outline-none focus:ring-2 focus:ring-[#3182F6]/30 select-text"
+                    required
+                >
+                <div class="grid grid-cols-2 gap-2 pt-1">
+                    <button
+                        type="button"
+                        onclick="hideApiKeyModal()"
+                        class="toss-press py-3 bg-[#F2F4F6] text-[#4E5968] rounded-2xl font-semibold text-[14px] cursor-pointer"
+                    >
+                        닫기
+                    </button>
+                    <button
+                        type="submit"
+                        class="toss-press py-3 bg-[#3182F6] text-white rounded-2xl font-bold text-[14px] cursor-pointer"
+                    >
+                        저장하기
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <main class="max-w-md mx-auto px-4 pt-3 space-y-2.5">
+
+        <!-- 상단 바: 차량 전환 세그먼트 컨트롤 + 우측 설정 아이콘 -->
+        <div class="flex items-center gap-2">
+            <div class="flex-1 bg-[#E5E8EB] p-1 rounded-2xl grid grid-cols-2 gap-1" id="car-tabs">
+                <button
+                    onclick="switchCar('car1')"
+                    id="btn-car1"
+                    class="toss-press py-2.5 px-3 rounded-[13px] text-[15px] font-bold flex items-center justify-center gap-1.5 bg-white text-[#F04452] shadow-xs cursor-pointer"
+                >
+                    <span class="w-2 h-2 rounded-full bg-[#F04452]" id="dot-car1"></span>
+                    <span>테봉이</span>
+                </button>
+                <button
+                    onclick="switchCar('car2')"
+                    id="btn-car2"
+                    class="toss-press py-2.5 px-3 rounded-[13px] text-[15px] font-semibold flex items-center justify-center gap-1.5 text-[#6B7684] cursor-pointer"
+                >
+                    <span class="w-2 h-2 rounded-full bg-[#B0B8C1]" id="dot-car2"></span>
+                    <span>머팔이</span>
+                </button>
+            </div>
+
+            <button
+                onclick="changePin()"
+                title="PIN 번호 설정"
+                class="toss-press w-11 h-11 rounded-2xl bg-white flex items-center justify-center text-[#8B95A1] hover:text-[#4E5968] cursor-pointer shrink-0"
+            >
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z" />
+                </svg>
+            </button>
+        </div>
+
+        <!-- 현재 주차 위치 히어로 카드 (토스 자산 카드 스타일 + 긴 텍스트 Fail-safe 적용) -->
+        <section
+            id="display-card"
+            onclick="toggleDisplayExpand()"
+            class="bg-white rounded-[24px] px-5 py-4 flex items-center justify-between gap-3 transition-all"
+        >
+            <div class="min-w-0 flex-1">
+                <div class="flex items-center justify-between gap-2">
+                    <div class="flex items-center gap-2">
+                        <span id="car-badge" class="inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-bold bg-[#FFF0F1] text-[#F04452]">
+                            현재 주차 위치
+                        </span>
+                        <span id="display-time" class="text-[12px] font-medium text-[#8B95A1]"></span>
+                        <span id="preview-badge" class="hidden text-[11px] font-semibold text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded">미리보기</span>
+                    </div>
+                    <span id="expand-hint" class="hidden text-[11px] font-semibold text-[#8B95A1] bg-[#F2F4F6] px-2 py-0.5 rounded-md shrink-0">
+                        전체보기 ▾
+                    </span>
+                </div>
+                <div id="display-row" class="mt-2 flex items-baseline gap-2.5 min-h-[38px]">
+                    <span id="display-floor" class="text-[30px] leading-none font-extrabold text-[#191F28] tracking-tight shrink-0">불러오는 중</span>
+                    <span id="display-zone" class="text-[21px] leading-tight font-bold text-[#333D4B] break-words line-clamp-2 min-w-0 flex-1"></span>
+                </div>
+            </div>
+        </section>
+
+        <!-- 원스크린 터치 기록 카드 -->
+        <section class="bg-white rounded-[24px] p-4 space-y-2.5">
+            
+            <!-- 주차 층 선택 (B1 / B2 / B3) -->
+            <div class="grid grid-cols-3 gap-2">
+                <button class="floor-btn toss-press py-3 bg-[#F2F4F6] text-[#4E5968] rounded-2xl text-[16px] font-bold cursor-pointer" onclick="selectFloor('B1')">B1</button>
+                <button class="floor-btn toss-press py-3 bg-[#F2F4F6] text-[#4E5968] rounded-2xl text-[16px] font-bold cursor-pointer" onclick="selectFloor('B2')">B2</button>
+                <button class="floor-btn toss-press py-3 bg-[#F2F4F6] text-[#4E5968] rounded-2xl text-[16px] font-bold cursor-pointer" onclick="selectFloor('B3')">B3</button>
+            </div>
+
+            <!-- 상세 구역 칩 그리드 (토스 스타일 커스텀 SVG 아이콘 배지 적용) -->
+            <div class="grid grid-cols-2 gap-2" id="zone-container">
+                <button class="zone-btn toss-press py-2.5 px-3 bg-[#F2F4F6] text-[#333D4B] rounded-2xl text-[14px] font-semibold text-left flex items-center gap-2.5 cursor-pointer" data-zone="105동 앞" onclick="toggleZone(this, '105동 앞')">
+                    <span class="zone-icon">
+                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M4 21h16M6 21V5a2 2 0 012-2h8a2 2 0 012 2v16M9 8h2m2 0h2M9 12h2m2 0h2M9 16h2m2 0h2" />
+                        </svg>
+                    </span>
+                    <span>105동 앞</span>
+                </button>
+                <button class="zone-btn toss-press py-2.5 px-3 bg-[#F2F4F6] text-[#333D4B] rounded-2xl text-[14px] font-semibold text-left flex items-center gap-2.5 cursor-pointer" data-zone="106동 앞" onclick="toggleZone(this, '106동 앞')">
+                    <span class="zone-icon">
+                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M4 21h16M6 21V5a2 2 0 012-2h8a2 2 0 012 2v16M9 8h2m2 0h2M9 12h2m2 0h2M9 16h2m2 0h2" />
+                        </svg>
+                    </span>
+                    <span>106동 앞</span>
+                </button>
+                <button class="zone-btn toss-press py-2.5 px-3 bg-[#F2F4F6] text-[#333D4B] rounded-2xl text-[14px] font-semibold text-left flex items-center gap-2.5 cursor-pointer" data-zone="가운데 줄" onclick="toggleZone(this, '가운데 줄')">
+                    <span class="zone-icon">
+                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M7 8l-4 4 4 4m10-8l4 4-4 4M3 12h18" />
+                        </svg>
+                    </span>
+                    <span>가운데 줄</span>
+                </button>
+                <button class="zone-btn toss-press py-2.5 px-3 bg-[#F2F4F6] text-[#333D4B] rounded-2xl text-[14px] font-semibold text-left flex items-center gap-2.5 cursor-pointer" data-zone="우측 사이드" onclick="toggleZone(this, '우측 사이드')">
+                    <span class="zone-icon">
+                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M4 12h13m0 0l-4-4m4 4l-4 4M20 5v14" />
+                        </svg>
+                    </span>
+                    <span>우측 사이드</span>
+                </button>
+                <button class="zone-btn toss-press py-2.5 px-3 bg-[#F2F4F6] text-[#333D4B] rounded-2xl text-[14px] font-semibold text-left flex items-center gap-2.5 cursor-pointer" data-zone="12라인" onclick="toggleZone(this, '12라인')">
+                    <span class="zone-icon text-[10px] font-extrabold tracking-tighter">1·2</span>
+                    <span>12라인</span>
+                </button>
+                <button class="zone-btn toss-press py-2.5 px-3 bg-[#F2F4F6] text-[#333D4B] rounded-2xl text-[14px] font-semibold text-left flex items-center gap-2.5 cursor-pointer" data-zone="34라인" onclick="toggleZone(this, '34라인')">
+                    <span class="zone-icon text-[10px] font-extrabold tracking-tighter">3·4</span>
+                    <span>34라인</span>
+                </button>
+                <button class="zone-btn toss-press py-2.5 px-3 bg-[#F2F4F6] text-[#333D4B] rounded-2xl text-[14px] font-semibold text-left flex items-center gap-2.5 cursor-pointer" data-zone="상가 방향" onclick="toggleZone(this, '상가 방향')">
+                    <span class="zone-icon">
+                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" />
+                        </svg>
+                    </span>
+                    <span>상가 방향</span>
+                </button>
+                <button class="zone-btn toss-press py-2.5 px-3 bg-[#F2F4F6] text-[#333D4B] rounded-2xl text-[14px] font-semibold text-left flex items-center gap-2.5 cursor-pointer" data-zone="충전기 주변" onclick="toggleZone(this, '충전기 주변')">
+                    <span class="zone-icon">
+                        <svg class="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24">
+                            <path d="M13 2L4.09 12.63a1 1 0 00.77 1.64H11v7.73l8.91-10.63a1 1 0 00-.77-1.64H13V2z" />
+                        </svg>
+                    </span>
+                    <span>충전기 주변</span>
+                </button>
+            </div>
+
+            <!-- 직접 입력 + Gemini AI 음성인식 마이크 버튼 (동일 행 배치로 세로 높이 추가 0px) -->
+            <div class="flex items-center gap-2">
+                <input
+                    type="text"
+                    id="custom-zone-input"
+                    oninput="updateCustomZone()"
+                    placeholder="직접 입력 또는 우측 마이크 터치"
+                    class="flex-1 min-w-0 py-3 px-4 bg-[#F2F4F6] text-[#191F28] placeholder:text-[#8B95A1] rounded-2xl text-[14px] font-medium focus:outline-none focus:bg-[#E5E8EB]/70 transition-colors select-text"
+                >
+                <button
+                    type="button"
+                    id="btn-mic"
+                    onclick="handleMicClick()"
+                    oncontextmenu="openApiKeyModal(event)"
+                    title="음성으로 주차 위치 입력 (길게 누르면 API 키 재설정)"
+                    class="toss-press w-11 h-11 rounded-2xl bg-[#F2F4F6] text-[#4E5968] flex items-center justify-center shrink-0 cursor-pointer"
+                >
+                    <!-- 기본 마이크 아이콘 -->
+                    <svg id="mic-icon-idle" class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M12 18.75a6 6 0 006-6v-1.5m-6 7.5a6 6 0 01-6-6v-1.5m6 7.5v3.75m-3.75 0h7.5M12 15.75a3 3 0 01-3-3V4.5a3 3 0 116 0v8.25a3 3 0 01-3 3z" />
+                    </svg>
+                    <!-- 녹음 중 정지 아이콘 -->
+                    <span id="mic-icon-recording" class="hidden w-3.5 h-3.5 rounded-xs bg-white"></span>
+                    <!-- AI 분석 중 스피너 -->
+                    <svg id="mic-icon-loading" class="hidden w-5 h-5 animate-spin text-[#3182F6]" fill="none" viewBox="0 0 24 24">
+                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="3"></circle>
+                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v3a5 5 0 00-5 5H4z"></path>
+                    </svg>
+                </button>
+            </div>
+
+            <!-- 주차 위치 기록하기 CTA 버튼 -->
+            <button
+                id="btn-save"
+                onclick="saveLocation()"
+                disabled
+                class="toss-press w-full py-3.5 bg-[#E5E8EB] text-[#8B95A1] rounded-2xl text-[16px] font-bold cursor-not-allowed"
+            >
+                주차 위치 기록하기
+            </button>
+        </section>
+
+        <!-- 이전 주차 기록 (히스토리) -->
+        <section class="bg-white rounded-[24px] px-5 py-4">
+            <div class="flex justify-between items-center mb-2">
+                <span class="text-[13px] font-bold text-[#8B95A1]">이전 기록</span>
+                <div class="flex items-center gap-3">
+                    <button onclick="openApiKeyModal(event)" class="toss-press text-[12px] text-[#8B95A1] hover:text-[#3182F6] font-semibold cursor-pointer">
+                        음성 AI 키 설정
+                    </button>
+                    <button onclick="clearHistory()" class="toss-press text-[12px] text-[#8B95A1] hover:text-[#F04452] font-semibold cursor-pointer">
+                        지우기
+                    </button>
+                </div>
+            </div>
+            <ul id="history-list" class="divide-y divide-[#F2F4F6] max-h-40 overflow-y-auto no-scrollbar"></ul>
+        </section>
+
+    </main>
+
+    <!-- 토스 스타일 플로팅 토스트 -->
+    <div id="toast" class="fixed bottom-6 left-1/2 -translate-x-1/2 bg-[#191F28]/95 backdrop-blur-xs text-white px-5 py-3 rounded-full text-[14px] font-semibold shadow-lg opacity-0 pointer-events-none transition-all duration-200 flex items-center gap-2 whitespace-nowrap z-50">
+        <span class="text-[#3182F6]">✓</span>
+        <span id="toast-text">주차 위치를 기록했어요</span>
+    </div>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-app.js";
+        import { getDatabase, ref, onValue, set } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-database.js";
+
+        // ============================================================================
+        // Firebase 설정 정보 (whereisourcar-app 연동 완료)
+        // ============================================================================
+        const firebaseConfig = {
+            apiKey: "AIzaSyABHKCYTJpf9kpr6FutEu8d9VFBz4ykWY4",
+            authDomain: "whereisourcar-app.firebaseapp.com",
+            databaseURL: "https://whereisourcar-app-default-rtdb.firebaseio.com",
+            projectId: "whereisourcar-app",
+            storageBucket: "whereisourcar-app.firebasestorage.app",
+            messagingSenderId: "997746821278",
+            appId: "1:997746821278:web:5a808dd691f006181a138f"
+        };
+
+        const isFirebaseConfigured = Boolean(firebaseConfig.databaseURL);
+        let db = null;
+        let currentRoomUnsubscribe = null;
+
+        if (isFirebaseConfigured) {
+            const app = initializeApp(firebaseConfig);
+            db = getDatabase(app);
+        } else {
+            document.getElementById('preview-badge').classList.remove('hidden');
+        }
+
+        const PIN_STORAGE_KEY = 'whereisourcar_family_pin';
+        const LOCAL_DATA_KEY = 'whereisourcar_preview_data';
+        const GEMINI_KEY_STORAGE = 'whereisourcar_gemini_api_key';
+
+        const PRESET_ZONES = [
+            '105동 앞', '106동 앞', '가운데 줄', '우측 사이드',
+            '12라인', '34라인', '상가 방향', '충전기 주변'
+        ];
+
+        // 기존 카페24 서버(api.php)에서 백업한 초기 데이터
+        const initialBackupData = {
+            car1: {
+                current: { floor: "B2", zone: "106동 앞, 34라인", time: "10/28 19:20" },
+                history: [
+                    { floor: "B3", zone: "105동 앞", time: "10/27 19:00" },
+                    { floor: "B3", zone: "충전기 주변", time: "10/26 17:55" },
+                    { floor: "B1", zone: "106동 앞, 34라인", time: "10/23 17:07" },
+                    { floor: "B1", zone: "우측 사이드", time: "10/23 12:14" },
+                    { floor: "B2", zone: "106동 앞, 34라인", time: "10/20 18:28" },
+                    { floor: "직접 입력", zone: "B3 65O", time: "10/20 14:24" },
+                    { floor: "직접 입력", zone: "65O", time: "10/20 14:24" },
+                    { floor: "B3", zone: "가운데 줄", time: "10/18 20:40" },
+                    { floor: "B1", zone: "106동 앞, 34라인", time: "10/17 16:32" },
+                    { floor: "B3", zone: "충전기 주변", time: "10/16 20:41" },
+                    { floor: "B1", zone: "우측 사이드", time: "10/15 15:15" },
+                    { floor: "B1", zone: "106동 앞, 34라인", time: "10/14 15:24" },
+                    { floor: "B1", zone: "가운데 줄", time: "10/12 14:31" },
+                    { floor: "직접 입력", zone: "지하 4층 F 제로", time: "10/12 12:53" },
+                    { floor: "B3", zone: "우측 사이드", time: "10/10 14:41" }
+                ]
+            },
+            car2: {
+                current: { floor: "B1", zone: "105동 앞, 12라인", time: "10/23 17:07" },
+                history: [
+                    { floor: "B3", zone: "충전기 주변", time: "10/6 23:08" },
+                    { floor: "B1", zone: "우측 사이드", time: "10/2 23:41" },
+                    { floor: "직접 입력", zone: "조업", time: "10/2 23:40" }
+                ]
+            }
+        };
+
+        let currentCar = 'car1';
+        let selectedFloor = '';
+        let selectedZones = [];
+        let customZoneText = '';
+        let familyPin = localStorage.getItem(PIN_STORAGE_KEY) || '';
+        let geminiApiKey = localStorage.getItem(GEMINI_KEY_STORAGE) || '';
+        let parkingData = {
+            car1: { current: null, history: [] },
+            car2: { current: null, history: [] }
+        };
+
+        function getThemeColors() {
+            return currentCar === 'car1'
+                ? {
+                    solidBg: 'bg-[#F04452]',
+                    softBg: 'bg-[#FFF0F1]',
+                    text: 'text-[#F04452]',
+                    ring: 'ring-2 ring-[#F04452]'
+                }
+                : {
+                    solidBg: 'bg-[#3182F6]',
+                    softBg: 'bg-[#E8F3FF]',
+                    text: 'text-[#3182F6]',
+                    ring: 'ring-2 ring-[#3182F6]'
+                };
+        }
+
+        function normalizeCarData(rawCar) {
+            if (!rawCar) return { current: null, history: [] };
+            return {
+                current: rawCar.current || null,
+                history: Array.isArray(rawCar.history) ? rawCar.history : []
+            };
+        }
+
+        function showPinModal(showError = false) {
+            const modal = document.getElementById('pin-modal');
+            const errorEl = document.getElementById('pin-error');
+            const inputEl = document.getElementById('pin-input');
+
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+            errorEl.classList.toggle('hidden', !showError);
+            inputEl.value = '';
+            setTimeout(() => inputEl.focus(), 50);
+        }
+
+        function hidePinModal() {
+            const modal = document.getElementById('pin-modal');
+            modal.classList.add('hidden');
+            modal.classList.remove('flex');
+        }
+
+        window.openApiKeyModal = function(event) {
+            if (event) event.preventDefault();
+            const modal = document.getElementById('apikey-modal');
+            const inputEl = document.getElementById('gemini-key-input');
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+            inputEl.value = '';
+            inputEl.placeholder = geminiApiKey
+                ? `현재 ${geminiApiKey.slice(0, 6)}... 등록됨 (새 키 붙여넣기)`
+                : 'gsk_... (Groq Whisper 추천)';
+            setTimeout(() => inputEl.focus(), 50);
+        };
+
+        window.hideApiKeyModal = function() {
+            const modal = document.getElementById('apikey-modal');
+            modal.classList.add('hidden');
+            modal.classList.remove('flex');
+        };
+
+        window.submitGeminiKey = async function(event) {
+            event.preventDefault();
+            const keyVal = document.getElementById('gemini-key-input').value.trim();
+            if (!keyVal) return;
+
+            geminiApiKey = keyVal;
+            localStorage.setItem(GEMINI_KEY_STORAGE, geminiApiKey);
+
+            // Firebase 연결 시 DB에도 저장하여 부부 기기에 자동 공유
+            if (isFirebaseConfigured && familyPin) {
+                try {
+                    const keyRef = ref(db, `parking_rooms/${familyPin}/config/geminiApiKey`);
+                    await set(keyRef, geminiApiKey);
+                } catch (e) {
+                    console.error("API 키 Firebase 동기화 실패:", e);
+                }
+            }
+
+            hideApiKeyModal();
+            showToast("AI 음성인식 키가 저장되었어요");
+        };
+
+        function connectDataWithPin(pin) {
+            if (!pin) {
+                showPinModal(false);
+                return;
+            }
+
+            if (!isFirebaseConfigured) {
+                localStorage.setItem(PIN_STORAGE_KEY, pin);
+                hidePinModal();
+                const savedLocal = localStorage.getItem(LOCAL_DATA_KEY);
+                const parsed = savedLocal ? JSON.parse(savedLocal) : initialBackupData;
+                parkingData = {
+                    car1: normalizeCarData(parsed.car1),
+                    car2: normalizeCarData(parsed.car2)
+                };
+                updateUI();
+                return;
+            }
+
+            if (currentRoomUnsubscribe) {
+                currentRoomUnsubscribe();
+                currentRoomUnsubscribe = null;
+            }
+
+            const roomRef = ref(db, `parking_rooms/${pin}`);
+            currentRoomUnsubscribe = onValue(
+                roomRef,
+                (snapshot) => {
+                    localStorage.setItem(PIN_STORAGE_KEY, pin);
+                    hidePinModal();
+                    const data = snapshot.val() || initialBackupData;
+                    parkingData = {
+                        car1: normalizeCarData(data.car1),
+                        car2: normalizeCarData(data.car2)
+                    };
+                    // Firebase에 저장된 공용 음성 AI 키가 있으면 자동 동기화하고, 로컬에만 있으면 Firebase에 업로드하여 부부 기기 공유
+                    if (data.config && data.config.geminiApiKey) {
+                        geminiApiKey = data.config.geminiApiKey;
+                        localStorage.setItem(GEMINI_KEY_STORAGE, geminiApiKey);
+                    } else if (geminiApiKey) {
+                        const keyRef = ref(db, `parking_rooms/${pin}/config/geminiApiKey`);
+                        set(keyRef, geminiApiKey).catch(() => {});
+                    }
+                    updateUI();
+                },
+                (error) => {
+                    console.error("Firebase 접근 거부 또는 오류:", error);
+                    localStorage.removeItem(PIN_STORAGE_KEY);
+                    familyPin = '';
+                    showPinModal(true);
+                }
+            );
+        }
+
+        async function saveCarToServer(carId) {
+            if (!isFirebaseConfigured) {
+                localStorage.setItem(LOCAL_DATA_KEY, JSON.stringify(parkingData));
+                showToast("주차 위치를 기록했어요");
+                return;
+            }
+
+            try {
+                const carRef = ref(db, `parking_rooms/${familyPin}/${carId}`);
+                await set(carRef, parkingData[carId]);
+                showToast("주차 위치를 기록했어요");
+            } catch (error) {
+                console.error("데이터 저장 실패:", error);
+                alert("저장에 실패했어요. PIN 번호나 네트워크 상태를 확인해 주세요.");
+            }
+        }
+
+        window.submitPin = function(event) {
+            event.preventDefault();
+            const inputVal = document.getElementById('pin-input').value.trim();
+            if (!inputVal) return;
+            familyPin = inputVal;
+            connectDataWithPin(familyPin);
+        };
+
+        window.changePin = function() {
+            showPinModal(false);
+        };
+
+        window.switchCar = function(carId) {
+            currentCar = carId;
+            const isCar1 = carId === 'car1';
+
+            const btnCar1 = document.getElementById('btn-car1');
+            const btnCar2 = document.getElementById('btn-car2');
+            const dotCar1 = document.getElementById('dot-car1');
+            const dotCar2 = document.getElementById('dot-car2');
+            const carBadge = document.getElementById('car-badge');
+            
+            if (isCar1) {
+                btnCar1.className = 'toss-press py-2.5 px-3 rounded-[13px] text-[15px] font-bold flex items-center justify-center gap-1.5 bg-white text-[#F04452] shadow-xs cursor-pointer';
+                btnCar2.className = 'toss-press py-2.5 px-3 rounded-[13px] text-[15px] font-semibold flex items-center justify-center gap-1.5 text-[#6B7684] cursor-pointer';
+                dotCar1.className = 'w-2 h-2 rounded-full bg-[#F04452]';
+                dotCar2.className = 'w-2 h-2 rounded-full bg-[#B0B8C1]';
+                carBadge.className = 'inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-bold bg-[#FFF0F1] text-[#F04452]';
+            } else {
+                btnCar1.className = 'toss-press py-2.5 px-3 rounded-[13px] text-[15px] font-semibold flex items-center justify-center gap-1.5 text-[#6B7684] cursor-pointer';
+                btnCar2.className = 'toss-press py-2.5 px-3 rounded-[13px] text-[15px] font-bold flex items-center justify-center gap-1.5 bg-white text-[#3182F6] shadow-xs cursor-pointer';
+                dotCar1.className = 'w-2 h-2 rounded-full bg-[#B0B8C1]';
+                dotCar2.className = 'w-2 h-2 rounded-full bg-[#3182F6]';
+                carBadge.className = 'inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-bold bg-[#E8F3FF] text-[#3182F6]';
+            }
+            
+            resetSelection();
+            updateUI(true);
+        };
+
+        function applyFloorSelection(floor) {
+            selectedFloor = floor;
+            const theme = getThemeColors();
+            document.querySelectorAll('.floor-btn').forEach(btn => {
+                btn.className = btn.innerText === selectedFloor
+                    ? `floor-btn toss-press py-3 ${theme.solidBg} text-white rounded-2xl text-[16px] font-bold cursor-pointer`
+                    : 'floor-btn toss-press py-3 bg-[#F2F4F6] text-[#4E5968] rounded-2xl text-[16px] font-bold cursor-pointer';
+            });
+            checkSaveButtonStatus();
+        }
+
+        window.selectFloor = function(floor) {
+            const nextFloor = selectedFloor === floor ? '' : floor;
+            applyFloorSelection(nextFloor);
+        };
+
+        function syncZoneButtonsUI() {
+            const theme = getThemeColors();
+            const selectedCarClass = currentCar === 'car1' ? 'zone-selected-car1' : 'zone-selected-car2';
+            document.querySelectorAll('.zone-btn').forEach(btn => {
+                const zName = btn.getAttribute('data-zone');
+                if (selectedZones.includes(zName)) {
+                    btn.className = `zone-btn ${selectedCarClass} toss-press py-2.5 px-3 ${theme.softBg} ${theme.text} ${theme.ring} rounded-2xl text-[14px] font-bold text-left flex items-center gap-2.5 cursor-pointer`;
+                } else {
+                    btn.className = 'zone-btn toss-press py-2.5 px-3 bg-[#F2F4F6] text-[#333D4B] rounded-2xl text-[14px] font-semibold text-left flex items-center gap-2.5 cursor-pointer';
+                }
+            });
+            checkSaveButtonStatus();
+        }
+
+        window.toggleZone = function(element, zoneName) {
+            if (selectedZones.includes(zoneName)) {
+                selectedZones = selectedZones.filter(z => z !== zoneName);
+            } else {
+                selectedZones.push(zoneName);
+            }
+            syncZoneButtonsUI();
+        };
+
+        window.updateCustomZone = function() {
+            customZoneText = document.getElementById('custom-zone-input').value.trim();
+            checkSaveButtonStatus();
+        };
+
+        function getCombinedZone() {
+            return selectedZones.join(' · ');
+        }
+
+        function checkSaveButtonStatus() {
+            const saveBtn = document.getElementById('btn-save');
+            const hasZoneSelection = selectedZones.length > 0;
+            const hasCustomText = customZoneText.length > 0;
+            const theme = getThemeColors();
+
+            if ((selectedFloor && hasZoneSelection) || hasCustomText) {
+                saveBtn.removeAttribute('disabled');
+                saveBtn.innerText = '주차 위치 기록하기';
+                saveBtn.className = `toss-press w-full py-3.5 ${theme.solidBg} text-white rounded-2xl text-[16px] font-bold cursor-pointer shadow-xs`;
+            } else {
+                saveBtn.setAttribute('disabled', 'true');
+                saveBtn.innerText = '주차 위치 기록하기';
+                saveBtn.className = 'toss-press w-full py-3.5 bg-[#E5E8EB] text-[#8B95A1] rounded-2xl text-[16px] font-bold cursor-not-allowed';
+            }
+        }
+
+        function resetSelection() {
+            selectedFloor = '';
+            selectedZones = [];
+            customZoneText = '';
+            
+            document.querySelectorAll('.floor-btn').forEach(btn => {
+                btn.className = 'floor-btn toss-press py-3 bg-[#F2F4F6] text-[#4E5968] rounded-2xl text-[16px] font-bold cursor-pointer';
+            });
+            document.querySelectorAll('.zone-btn').forEach(btn => {
+                btn.className = 'zone-btn toss-press py-2.5 px-3 bg-[#F2F4F6] text-[#333D4B] rounded-2xl text-[14px] font-semibold text-left flex items-center gap-2.5 cursor-pointer';
+            });
+            document.getElementById('custom-zone-input').value = '';
+            
+            checkSaveButtonStatus();
+        }
+
+        // ============================================================================
+        // Gemini 멀티모달 음성인식 (주차 층 + 상세 위치 버튼 + 직접 입력 자동 분류)
+        // ============================================================================
+        let mediaRecorder = null;
+        let audioChunks = [];
+        let isRecording = false;
+        let recordingTimer = null;
+
+        function setMicState(state) {
+            const btn = document.getElementById('btn-mic');
+            const idleIcon = document.getElementById('mic-icon-idle');
+            const recIcon = document.getElementById('mic-icon-recording');
+            const loadIcon = document.getElementById('mic-icon-loading');
+            const inputEl = document.getElementById('custom-zone-input');
+
+            idleIcon.classList.add('hidden');
+            recIcon.classList.add('hidden');
+            loadIcon.classList.add('hidden');
+            btn.classList.remove('mic-recording', 'bg-[#F04452]', 'text-white');
+            btn.classList.add('bg-[#F2F4F6]', 'text-[#4E5968]');
+
+            if (state === 'recording') {
+                recIcon.classList.remove('hidden');
+                btn.classList.remove('bg-[#F2F4F6]', 'text-[#4E5968]');
+                btn.classList.add('bg-[#F04452]', 'text-white', 'mic-recording');
+                inputEl.placeholder = '듣고 있어요... 완료하려면 다시 터치';
+            } else if (state === 'loading') {
+                loadIcon.classList.remove('hidden');
+                inputEl.placeholder = 'AI가 주차 위치를 분석하고 있어요...';
+            } else {
+                idleIcon.classList.remove('hidden');
+                inputEl.placeholder = '직접 입력 또는 우측 마이크 터치';
+            }
+        }
+
+        // 브라우저 녹음 오디오를 음성인식에 최적화된 경량 8kHz Mono WAV(Base64)로 초고속 변환 (용량 50% 절감)
+        async function audioBlobToWavBase64(blob) {
+            const arrayBuffer = await blob.arrayBuffer();
+            const AudioCtx = window.AudioContext || window.webkitAudioContext;
+            const audioCtx = new AudioCtx();
+            try {
+                const audioBuffer = await audioCtx.decodeAudioData(arrayBuffer);
+                const targetSampleRate = 8000;
+                const offlineCtx = new OfflineAudioContext(
+                    1,
+                    Math.max(1, Math.ceil(audioBuffer.duration * targetSampleRate)),
+                    targetSampleRate
+                );
+                const source = offlineCtx.createBufferSource();
+                source.buffer = audioBuffer;
+                source.connect(offlineCtx.destination);
+                source.start(0);
+                const renderedBuffer = await offlineCtx.startRendering();
+                const channelData = renderedBuffer.getChannelData(0);
+
+                // 16-bit PCM WAV 인코딩
+                const wavBuffer = new ArrayBuffer(44 + channelData.length * 2);
+                const view = new DataView(wavBuffer);
+                const writeString = (offset, str) => {
+                    for (let i = 0; i < str.length; i++) {
+                        view.setUint8(offset + i, str.charCodeAt(i));
+                    }
+                };
+
+                writeString(0, 'RIFF');
+                view.setUint32(4, 36 + channelData.length * 2, true);
+                writeString(8, 'WAVE');
+                writeString(12, 'fmt ');
+                view.setUint32(16, 16, true);
+                view.setUint16(20, 1, true);
+                view.setUint16(22, 1, true);
+                view.setUint32(24, targetSampleRate, true);
+                view.setUint32(28, targetSampleRate * 2, true);
+                view.setUint16(32, 2, true);
+                view.setUint16(34, 16, true);
+                writeString(36, 'data');
+                view.setUint32(40, channelData.length * 2, true);
+
+                let offset = 44;
+                for (let i = 0; i < channelData.length; i++, offset += 2) {
+                    const sample = Math.max(-1, Math.min(1, channelData[i]));
+                    view.setInt16(offset, sample < 0 ? sample * 0x8000 : sample * 0x7FFF, true);
+                }
+
+                const wavBlob = new Blob([wavBuffer], { type: 'audio/wav' });
+                return await new Promise((resolve, reject) => {
+                    const reader = new FileReader();
+                    reader.onloadend = () => resolve(reader.result.split(',')[1]);
+                    reader.onerror = reject;
+                    reader.readAsDataURL(wavBlob);
+                });
+            } finally {
+                if (audioCtx.state !== 'closed') {
+                    audioCtx.close().catch(() => {});
+                }
+            }
+        }
+
+        window.handleMicClick = async function() {
+            if (!geminiApiKey) {
+                openApiKeyModal();
+                return;
+            }
+
+            if (isRecording && mediaRecorder && mediaRecorder.state === 'recording') {
+                stopRecording();
+                return;
+            }
+
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                audioChunks = [];
+
+                let options = {};
+                if (typeof MediaRecorder.isTypeSupported === 'function') {
+                    if (MediaRecorder.isTypeSupported('audio/webm;codecs=opus')) {
+                        options = { mimeType: 'audio/webm;codecs=opus' };
+                    } else if (MediaRecorder.isTypeSupported('audio/mp4')) {
+                        options = { mimeType: 'audio/mp4' };
+                    }
+                }
+
+                mediaRecorder = new MediaRecorder(stream, options);
+                mediaRecorder.ondataavailable = (e) => {
+                    if (e.data && e.data.size > 0) audioChunks.push(e.data);
+                };
+
+                mediaRecorder.onstop = async () => {
+                    stream.getTracks().forEach(t => t.stop());
+                    if (audioChunks.length === 0) {
+                        setMicState('idle');
+                        return;
+                    }
+                    const rawMime = (mediaRecorder.mimeType || 'audio/mp4').split(';')[0];
+                    const audioBlob = new Blob(audioChunks, { type: rawMime });
+                    await processRecordedAudio(audioBlob, rawMime);
+                };
+
+                // 200ms 단위로 청크를 수집하여 짧은 음성도 유실 없이 녹음
+                mediaRecorder.start(200);
+                isRecording = true;
+                setMicState('recording');
+
+                // 최대 8초 후 자동 종료 안전장치
+                recordingTimer = setTimeout(() => {
+                    if (isRecording) stopRecording();
+                }, 8000);
+            } catch (err) {
+                console.error("마이크 권한 오류:", err);
+                alert("마이크 권한을 허용해 주세요. (아이폰/브라우저 주소창의 마이크 권한 확인)");
+                setMicState('idle');
+            }
+        };
+
+        function stopRecording() {
+            isRecording = false;
+            if (recordingTimer) {
+                clearTimeout(recordingTimer);
+                recordingTimer = null;
+            }
+            if (mediaRecorder && mediaRecorder.state === 'recording') {
+                setMicState('loading');
+                mediaRecorder.stop();
+            }
+        }
+
+        // ============================================================================
+        // 1단계: 0.001초(1ms) 한글+숫자 혼합 정규화 및 즉시 버튼 파서
+        // ("백 6동" -> "106동 앞", "3사라인" -> "34라인" 등 혼합 표기 완벽 대응)
+        // ============================================================================
+        function parseKoreanParkingText(rawTranscript) {
+            let text = (rawTranscript || '').trim();
+            if (!text) return { floor: '', matchedZones: [], customText: '' };
+
+            let floor = '';
+            const matchedZones = [];
+
+            // 1. 주차 층(B1~B3) 감지 및 원문에서 제거
+            const floorPatterns = [
+                { value: 'B1', regex: /(?:지하\s*)?(?:[1일]\s*층|비\s*원|(?<![a-zA-Z0-9])b\s*[-]?\s*1(?:\s*층)?|비\s*[1일](?:\s*층)?)/gi },
+                { value: 'B2', regex: /(?:지하\s*)?(?:[2이]\s*층|비\s*투|(?<![a-zA-Z0-9])b\s*[-]?\s*2(?:\s*층)?|비\s*[2이](?:\s*층)?)/gi },
+                { value: 'B3', regex: /(?:지하\s*)?(?:[3삼]\s*층|비\s*쓰리|(?<![a-zA-Z0-9])b\s*[-]?\s*3(?:\s*층)?|비\s*[3삼](?:\s*층)?)/gi }
+            ];
+
+            for (const fp of floorPatterns) {
+                if (text.match(fp.regex)) {
+                    floor = fp.value;
+                    text = text.replace(fp.regex, ' ');
+                    break;
+                }
+            }
+
+            // 2. 8개 상세 구역 프리셋 버튼 즉시 매칭 ("백 6동", "1공6동", "3사라인", "일2라인" 등 한글+숫자 혼합 포함)
+            const zoneRules = [
+                {
+                    zone: '105동 앞',
+                    regex: /(?:105|1\s*[0공영]\s*[5오]|[백배]\s*[5오]|[1일]\s*[0공영]\s*[5오])\s*동(?:\s*앞|\s*쪽|\s*근처)?/gi
+                },
+                {
+                    zone: '106동 앞',
+                    regex: /(?:106|1\s*[0공영]\s*[6육륙]|[백배]\s*[6육륙규]|[1일]\s*[0공영]\s*[6육륙])\s*동(?:\s*앞|\s*쪽|\s*근처)?/gi
+                },
+                {
+                    zone: '가운데 줄',
+                    regex: /(?:가운데\s*줄|가운데\s*라인|중앙\s*줄|가운데|중앙)/gi
+                },
+                {
+                    zone: '우측 사이드',
+                    regex: /(?:우측\s*사이드|오른쪽\s*사이드|우측\s*끝|오른쪽|우측)/gi
+                },
+                {
+                    zone: '12라인',
+                    regex: /(?:12|[1일]\s*[,.\s-]?\s*[2이]|십\s*[2이]|[1일]\s*십\s*[2이])\s*라인/gi
+                },
+                {
+                    zone: '34라인',
+                    regex: /(?:34|[3삼]\s*[,.\s-]?\s*[4사]|[3삼]\s*십\s*[4사])\s*라인/gi
+                },
+                {
+                    zone: '상가 방향',
+                    regex: /상가(?:\s*방향|\s*쪽|\s*앞|\s*근처)?/gi
+                },
+                {
+                    zone: '충전기 주변',
+                    regex: /(?:충전기|충전소|전기차)(?:\s*주변|\s*쪽|\s*앞|\s*근처)?/gi
+                }
+            ];
+
+            for (const zr of zoneRules) {
+                if (text.match(zr.regex)) {
+                    matchedZones.push(zr.zone);
+                    text = text.replace(zr.regex, ' ');
+                }
+            }
+
+            // 3. 자주 쓰는 기둥/알파벳 발음 보정
+            text = text
+                .replace(/(?:65|육십\s*오|육\s*오)\s*(?:오|0|영|o)/gi, '65O')
+                .replace(/에프\s*(?:제로|영|공|오|0)/gi, 'F0')
+                .replace(/비\s*다시\s*영?\s*(\d+)/gi, (_, n) => `B-${String(n).padStart(2, '0')}`)
+                .replace(/^[,\s·.]+|[,\s·.]+$/g, '')
+                .replace(/\s*[,\s·.]+\s*/g, ' ')
+                .replace(/\s{2,}/g, ' ')
+                .trim();
+
+            return { floor, matchedZones, customText: text };
+        }
+
+        // ============================================================================
+        // 2단계: 잔여 텍스트가 있을 때 Groq 초고속 LLM(0.15초)으로 Gemini급 문맥 보정
+        // ============================================================================
+        async function refineWithGroqLLM(rawTranscript, initialParsed) {
+            // 1단계에서 모든 단어가 버튼으로 깔끔하게 매칭되어 남은 글자가 없으면 0초 만에 즉시 종료!
+            if (!initialParsed.customText || !geminiApiKey.startsWith('gsk_')) {
+                return initialParsed;
+            }
+
+            try {
+                const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${geminiApiKey}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        model: 'llama-3.3-70b-versatile',
+                        temperature: 0,
+                        response_format: { type: 'json_object' },
+                        messages: [
+                            {
+                                role: 'system',
+                                content: `한국 아파트 지하주차장 음성인식 결과를 JSON으로 분류하세요:
+{"floor":"B1"|"B2"|"B3"|"","matchedZones":["105동 앞","106동 앞","가운데 줄","우측 사이드","12라인","34라인","상가 방향","충전기 주변" 중 해당 항목들],"customText":"기둥 번호(예: 기둥 B-05, 65O, F0) 등 프리셋 버튼에 없는 추가 메모만 깔끔히 표기(없으면 빈 문자열)"}
+예: "백 6동 앞, 3사라인" -> {"floor":"","matchedZones":["106동 앞","34라인"],"customText":""}`
+                            },
+                            {
+                                role: 'user',
+                                content: rawTranscript
+                            }
+                        ]
+                    })
+                });
+
+                if (!response.ok) return initialParsed;
+                const data = await response.json();
+                const content = data?.choices?.[0]?.message?.content;
+                if (!content) return initialParsed;
+                return JSON.parse(content);
+            } catch (_) {
+                return initialParsed;
+            }
+        }
+
+        function applyParsedResult(parsed) {
+            if (parsed.floor && ['B1', 'B2', 'B3'].includes(parsed.floor)) {
+                applyFloorSelection(parsed.floor);
+            }
+
+            if (Array.isArray(parsed.matchedZones) && parsed.matchedZones.length > 0) {
+                parsed.matchedZones.forEach(z => {
+                    if (PRESET_ZONES.includes(z) && !selectedZones.includes(z)) {
+                        selectedZones.push(z);
+                    }
+                });
+                syncZoneButtonsUI();
+            }
+
+            if (parsed.customText && parsed.customText.trim()) {
+                const inputEl = document.getElementById('custom-zone-input');
+                inputEl.value = parsed.customText.trim();
+                updateCustomZone();
+            }
+        }
+
+        // ============================================================================
+        // 2안: Whisper API (Groq 0.2~0.3초 초고속 / OpenAI 호환) 호출
+        // ============================================================================
+        async function analyzeAudioWithWhisper(audioBlob, rawMime) {
+            const isGroq = geminiApiKey.startsWith('gsk_');
+            const endpoint = isGroq
+                ? 'https://api.groq.com/openai/v1/audio/transcriptions'
+                : 'https://api.openai.com/v1/audio/transcriptions';
+            const model = isGroq ? 'whisper-large-v3-turbo' : 'whisper-1';
+
+            const ext = rawMime.includes('webm') ? 'webm' : 'm4a';
+            const formData = new FormData();
+            formData.append('file', audioBlob, `parking.${ext}`);
+            formData.append('model', model);
+            formData.append('language', 'ko');
+            formData.append('temperature', '0');
+            formData.append(
+                'prompt',
+                'B1, B2, B3, 지하 1층, 지하 2층, 지하 3층, 105동 앞, 106동 앞, 가운데 줄, 우측 사이드, 12라인, 34라인, 상가 방향, 충전기 주변, 기둥 B-05, 65O, F0'
+            );
+
+            const response = await fetch(endpoint, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${geminiApiKey}`
+                },
+                body: formData
+            });
+
+            if (!response.ok) {
+                let errMsg = `HTTP ${response.status}`;
+                try {
+                    const errJson = await response.json();
+                    errMsg = errJson?.error?.message || errMsg;
+                } catch (_) {}
+                throw new Error(errMsg);
+            }
+
+            const data = await response.json();
+            const rawText = data.text || '';
+            const initialParsed = parseKoreanParkingText(rawText);
+            const finalParsed = await refineWithGroqLLM(rawText, initialParsed);
+            applyParsedResult(finalParsed);
+        }
+
+        async function processRecordedAudio(audioBlob, rawMime) {
+            try {
+                // Groq(gsk_...) 또는 OpenAI(sk-...) 키인 경우 초고속 Whisper + 0.001초 로컬 파서 실행
+                if (geminiApiKey.startsWith('gsk_') || geminiApiKey.startsWith('sk-')) {
+                    await analyzeAudioWithWhisper(audioBlob, rawMime);
+                    setMicState('idle');
+                    showToast("음성으로 위치를 선택했어요");
+                    return;
+                }
+
+                // Gemini(AIza...) 키인 경우 기존 Gemini 분석 실행
+                await analyzeAudioWithGemini(audioBlob);
+            } catch (error) {
+                console.error("음성 분석 실패:", error);
+                setMicState('idle');
+                alert(`음성 인식 실패: ${error.message || '다시 시도해 주세요.'}`);
+            }
+        }
+
+        let cachedModelList = null;
+        let lastFastModel = localStorage.getItem('whereisourcar_fast_model') || '';
+
+        async function callGeminiAudioApi(modelName, prompt, wavBase64, disableThinking = true) {
+            const generationConfig = {
+                responseMimeType: "application/json",
+                temperature: 0
+            };
+
+            if (disableThinking) {
+                generationConfig.thinkingConfig = { thinkingBudget: 0 };
+            }
+
+            const bodyPayload = {
+                contents: [{
+                    parts: [
+                        { text: prompt },
+                        { inlineData: { mimeType: "audio/wav", data: wavBase64 } }
+                    ]
+                }],
+                generationConfig
+            };
+
+            const response = await fetch(
+                `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${encodeURIComponent(geminiApiKey)}`,
+                {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(bodyPayload)
+                }
+            );
+
+            if (!response.ok) {
+                // 만약 특정 모델이 thinkingConfig 파라미터를 지원하지 않아 400을 반환하면 즉시 제외하고 재호출
+                if (response.status === 400 && disableThinking) {
+                    return await callGeminiAudioApi(modelName, prompt, wavBase64, false);
+                }
+                let errMsg = `HTTP ${response.status}`;
+                try {
+                    const errJson = await response.json();
+                    errMsg = errJson?.error?.message || errMsg;
+                } catch (_) {}
+                throw new Error(errMsg);
+            }
+
+            const data = await response.json();
+            lastFastModel = modelName;
+            localStorage.setItem('whereisourcar_fast_model', modelName);
+            return data;
+        }
+
+        // 가장 응답이 빠른 flash-lite / flash 모델 목록을 미리 캐싱
+        async function getFallbackModels() {
+            if (cachedModelList && cachedModelList.length > 0) {
+                if (lastFastModel) {
+                    return [lastFastModel, ...cachedModelList.filter(m => m !== lastFastModel)];
+                }
+                return cachedModelList;
+            }
+
+            const defaultCandidates = [
+                'gemini-3.8-flash-lite',
+                'gemini-3.8-flash-lite-preview',
+                'gemini-3.8-flash',
+                'gemini-2.5-flash-lite',
+                'gemini-2.5-flash'
+            ];
+
+            try {
+                const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${encodeURIComponent(geminiApiKey)}`);
+                if (!res.ok) return defaultCandidates;
+                const data = await res.json();
+                const available = (data.models || [])
+                    .filter(m => Array.isArray(m.supportedGenerationMethods) && m.supportedGenerationMethods.includes('generateContent'))
+                    .map(m => m.name.replace(/^models\//, ''))
+                    .filter(name => /gemini/i.test(name) && !/embedding|imagen|veo|tts|vision/i.test(name));
+
+                // 응답 속도가 가장 빠르고 혼잡도가 낮은 flash-lite 모델을 1순위로 배치
+                available.sort((a, b) => {
+                    const score = (n) => {
+                        if (n.includes('3.8') && n.includes('flash-lite')) return 1;
+                        if (n.includes('flash-lite')) return 2;
+                        if (n.includes('3.8') && n.includes('flash')) return 3;
+                        if (n.includes('flash')) return 4;
+                        return 5;
+                    };
+                    return score(a) - score(b);
+                });
+
+                cachedModelList = [...new Set([...available, ...defaultCandidates])];
+                if (lastFastModel && cachedModelList.includes(lastFastModel)) {
+                    return [lastFastModel, ...cachedModelList.filter(m => m !== lastFastModel)];
+                }
+                return cachedModelList;
+            } catch (_) {
+                return defaultCandidates;
+            }
+        }
+
+        async function analyzeAudioWithGemini(audioBlob) {
+            try {
+                const wavBase64 = await audioBlobToWavBase64(audioBlob);
+                const prompt = `한국 아파트 주차 위치 음성입니다. JSON만 출력:
+{"floor":"B1"|"B2"|"B3"|"","matchedZones":["105동 앞","106동 앞","가운데 줄","우측 사이드","12라인","34라인","상가 방향","충전기 주변" 중 일치항목],"customText":"기둥번호(예:기둥 B-05,65O,F0) 등 기타위치"}
+발음보정: 백오동->105동 앞, 백육동->106동 앞, 일이라인->12라인, 삼사라인->34라인, 비원/일층->B1, 비투/이층->B2, 비쓰리/삼층->B3, 육십오오->65O, 에프제로->F0`;
+
+                const candidateModels = await getFallbackModels();
+                const primaryModel = candidateModels[0];
+                const secondaryModel = candidateModels[1] || 'gemini-3.8-flash';
+
+                let result = null;
+                try {
+                    // 1순위 모델 즉시 호출 + 0.7초 이상 지연 시 2순위 모델을 병렬로 동시 출발시켜 먼저 오는 응답 즉시 채택
+                    result = await Promise.any([
+                        callGeminiAudioApi(primaryModel, prompt, wavBase64),
+                        new Promise((resolve, reject) => {
+                            setTimeout(() => {
+                                callGeminiAudioApi(secondaryModel, prompt, wavBase64).then(resolve).catch(reject);
+                            }, 700);
+                        })
+                    ]);
+                } catch (_) {
+                    // 만약 상위 2개 모델 모두 실패 시 3순위 모델 호출
+                    for (const backupModel of candidateModels.slice(2, 5)) {
+                        try {
+                            result = await callGeminiAudioApi(backupModel, prompt, wavBase64);
+                            if (result) break;
+                        } catch (e) {}
+                    }
+                }
+
+                if (!result) {
+                    throw new Error('서버 응답 지연 또는 모델을 찾을 수 없습니다.');
+                }
+
+                const parts = result?.candidates?.[0]?.content?.parts || [];
+                const textPart = parts.find(p => !p.thought && typeof p.text === 'string') || parts[0];
+                const rawText = (textPart?.text || '{}')
+                    .replace(/^```json\s*/i, '')
+                    .replace(/^```\s*/i, '')
+                    .replace(/```\s*$/, '')
+                    .trim();
+
+                const parsed = JSON.parse(rawText);
+
+                // 1. 주차 층 자동 선택
+                if (parsed.floor && ['B1', 'B2', 'B3'].includes(parsed.floor)) {
+                    applyFloorSelection(parsed.floor);
+                }
+
+                // 2. 상세 구역 프리셋 버튼 자동 선택
+                if (Array.isArray(parsed.matchedZones) && parsed.matchedZones.length > 0) {
+                    parsed.matchedZones.forEach(z => {
+                        if (PRESET_ZONES.includes(z) && !selectedZones.includes(z)) {
+                            selectedZones.push(z);
+                        }
+                    });
+                    syncZoneButtonsUI();
+                }
+
+                // 3. 기타/기둥 번호는 직접 입력 칸에 채우기
+                if (parsed.customText && parsed.customText.trim()) {
+                    const inputEl = document.getElementById('custom-zone-input');
+                    inputEl.value = parsed.customText.trim();
+                    updateCustomZone();
+                }
+
+                setMicState('idle');
+                showToast("음성으로 위치를 선택했어요");
+            } catch (error) {
+                console.error("Gemini 음성 분석 실패:", error);
+                setMicState('idle');
+                alert(`음성 인식 실패: ${error.message || '다시 시도해 주세요.'}`);
+            }
+        }
+
+        window.saveLocation = async function(floor = selectedFloor, zone = getCombinedZone()) {
+            let newRecord;
+            const hasCustomText = customZoneText.length > 0;
+
+            if (!hasCustomText && (!floor || !zone)) {
+                return;
+            }
+
+            const now = new Date();
+            const timeStr = `${now.getMonth()+1}/${now.getDate()} ${now.getHours().toString().padStart(2,'0')}:${now.getMinutes().toString().padStart(2,'0')}`;
+            
+            if (hasCustomText) {
+                const combinedWithCustom = zone ? `${zone} · ${customZoneText}` : customZoneText;
+                newRecord = { floor: selectedFloor || '직접 입력', zone: combinedWithCustom, time: timeStr };
+            } else {
+                newRecord = { floor, zone, time: timeStr };
+            }
+            
+            if (parkingData[currentCar].current) {
+                parkingData[currentCar].history.unshift(parkingData[currentCar].current);
+            }
+            parkingData[currentCar].current = newRecord;
+
+            resetSelection();
+            await saveCarToServer(currentCar);
+            updateUI(true);
+        };
+
+        let isDisplayExpanded = false;
+        let isZoneOverflowing = false;
+
+        function applyZoneTypography(text) {
+            const rowEl = document.getElementById('display-row');
+            const zoneEl = document.getElementById('display-zone');
+            const len = (text || '').length;
+
+            // 글자 수가 길어져도 너무 작아지지 않도록 21px -> 18px -> 16px 단계 유지
+            let sizeClass = 'text-[21px] leading-tight -translate-y-[1px]';
+            let rowAlign = 'items-baseline';
+
+            if (len > 26) {
+                sizeClass = 'text-[16px] leading-snug';
+                rowAlign = 'items-center';
+            } else if (len > 15) {
+                sizeClass = 'text-[18px] leading-snug';
+                rowAlign = 'items-center';
+            }
+
+            rowEl.className = `mt-2 flex ${rowAlign} gap-2.5 min-h-[38px]`;
+            const clampClass = isDisplayExpanded ? '' : 'line-clamp-2';
+            zoneEl.className = `${sizeClass} font-bold text-[#333D4B] break-words ${clampClass} min-w-0 flex-1`;
+        }
+
+        function updateOverflowUI() {
+            const zoneEl = document.getElementById('display-zone');
+            const hintEl = document.getElementById('expand-hint');
+            const cardEl = document.getElementById('display-card');
+
+            if (!isDisplayExpanded) {
+                isZoneOverflowing = zoneEl.scrollHeight > zoneEl.clientHeight + 2;
+            }
+
+            if (isZoneOverflowing) {
+                hintEl.classList.remove('hidden');
+                hintEl.innerText = isDisplayExpanded ? '접기 ▴' : '전체보기 ▾';
+                cardEl.classList.add('cursor-pointer', 'toss-press');
+            } else {
+                hintEl.classList.add('hidden');
+                cardEl.classList.remove('cursor-pointer', 'toss-press');
+            }
+        }
+
+        window.toggleDisplayExpand = function() {
+            if (!isZoneOverflowing) return;
+            isDisplayExpanded = !isDisplayExpanded;
+            const currentZoneText = parkingData[currentCar]?.current?.zone || '';
+            applyZoneTypography(currentZoneText);
+            updateOverflowUI();
+        };
+
+        function updateUI(shouldAnimate = false) {
+            const carData = parkingData[currentCar];
+            const floorEl = document.getElementById('display-floor');
+            const zoneEl = document.getElementById('display-zone');
+            const timeEl = document.getElementById('display-time');
+
+            isDisplayExpanded = false;
+            isZoneOverflowing = false;
+
+            const historyList = document.getElementById('history-list');
+            historyList.innerHTML = '';
+
+            [floorEl, zoneEl, timeEl].forEach(el => el.classList.remove('animate-fadeIn'));
+
+            if (!carData.history || carData.history.length === 0) {
+                historyList.innerHTML = `<li class="text-[13px] text-[#8B95A1] text-center py-3">기록이 없어요</li>`;
+            } else {
+                carData.history.forEach(item => {
+                    const li = document.createElement('li');
+                    li.className = 'flex justify-between items-start gap-3 py-2.5 text-[14px]';
+                    li.innerHTML = `
+                        <div class="flex items-baseline gap-2 min-w-0 flex-1">
+                            <span class="font-bold text-[#191F28] shrink-0">${item.floor}</span>
+                            <span class="font-medium text-[#4E5968] break-words min-w-0">${item.zone}</span>
+                        </div>
+                        <span class="text-[12px] font-medium text-[#8B95A1] shrink-0 pt-0.5">${item.time}</span>
+                    `;
+                    historyList.appendChild(li);
+                });
+            }
+
+            if (shouldAnimate) {
+                void floorEl.offsetWidth;
+            }
+
+            if (carData.current) {
+                floorEl.innerText = carData.current.floor;
+                zoneEl.innerText = carData.current.zone;
+                timeEl.innerText = carData.current.time;
+                applyZoneTypography(carData.current.zone);
+            } else {
+                floorEl.innerText = '기록 없음';
+                zoneEl.innerText = '위치를 선택해 주세요';
+                timeEl.innerText = '';
+                applyZoneTypography('');
+            }
+
+            requestAnimationFrame(updateOverflowUI);
+
+            if (shouldAnimate) {
+                [floorEl, zoneEl, timeEl].forEach(el => el.classList.add('animate-fadeIn'));
+            }
+        }
+
+        window.clearHistory = async function() {
+            if (confirm('이전 주차 기록을 모두 지울까요?')) {
+                parkingData[currentCar].history = [];
+                await saveCarToServer(currentCar);
+                updateUI();
+            }
+        };
+
+        function showToast(message) {
+            const toast = document.getElementById('toast');
+            const toastText = document.getElementById('toast-text');
+            toastText.innerText = message;
+            toast.classList.remove('opacity-0');
+
+            setTimeout(() => {
+                toast.classList.add('opacity-0');
+            }, 1800);
+        }
+
+        connectDataWithPin(familyPin);
+    </script>
+</body>
+</html>
